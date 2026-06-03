@@ -10,6 +10,7 @@ alloy::sol! {
     struct PublicDecryptVerification {
         bytes32[] ctHandles;
         bytes decryptedResult;
+        bytes extraData;
     }
 }
 
@@ -22,12 +23,13 @@ pub fn verify_signatures(
     ct_handles: &[String],
     decrypted_result: &str,
     signatures: &[String],
+    extra_data: &str,
 ) -> Result<()> {
     let verifying_address = validate_address_from_str(verifying_contract_address)?;
 
     // Prepare EIP-712 domain and message
     let domain = create_eip712_domain(gateway_chain_id, verifying_address);
-    let message = create_verification_message(ct_handles, decrypted_result)?;
+    let message = create_verification_message(ct_handles, decrypted_result, extra_data)?;
     let signing_hash = message.eip712_signing_hash(&domain);
 
     // Verify each signature
@@ -60,6 +62,7 @@ fn create_eip712_domain(
 fn create_verification_message(
     ct_handles: &[String],
     decrypted_result: &str,
+    extra_data: &str,
 ) -> Result<PublicDecryptVerification> {
     // Convert handles to bytes32
     let ct_handles_bytes32 = ct_handles
@@ -68,10 +71,12 @@ fn create_verification_message(
         .collect::<Result<Vec<_>>>()?;
 
     let decrypted_result_bytes = parse_hex_string(decrypted_result, "decrypted result")?;
+    let extra_data_bytes = parse_hex_string(extra_data, "extra data")?;
 
     Ok(PublicDecryptVerification {
         ctHandles: ct_handles_bytes32,
         decryptedResult: decrypted_result_bytes,
+        extraData: extra_data_bytes
     })
 }
 

@@ -187,10 +187,11 @@ impl ResponseProcessor {
         debug!("Parsed JSON response successfully: {}", response_data);
 
         // Extract decrypted value and signatures
-        let (decrypted_value, signatures) = extract_response_data(&response_data)?;
+        let (decrypted_value, signatures, extra_data) = extract_response_data(&response_data)?;
 
         debug!("Decrypted value: {}", decrypted_value);
         debug!("Number of signatures: {}", signatures.len());
+        debug!("extra_data value: {}", extra_data);
 
         // Verify signatures using EIP-712
         info!(
@@ -206,6 +207,7 @@ impl ResponseProcessor {
             &ct_handles,
             &decrypted_value,
             &signatures,
+            &extra_data,
         )?;
 
         // Deserialize the decrypted result based on handle types
@@ -231,32 +233,17 @@ fn parse_json_response(json_response: &str) -> Result<serde_json::Value> {
         .map_err(|e| FhevmError::DecryptionError(format!("JSON parse error: {e}")))
 }
 
-fn extract_response_data(response_data: &serde_json::Value) -> Result<(String, Vec<String>)> {
-    // Extract response array
-    let responses = response_data
-        .get("response")
-        .and_then(|r| r.as_array())
-        .ok_or_else(|| FhevmError::DecryptionError("No response array in JSON".to_string()))?;
-
-    if responses.is_empty() {
-        return Err(FhevmError::DecryptionError(
-            "No responses in JSON response array".to_string(),
-        ));
-    }
-
-    // Process the first response (matching JS behavior)
-    let result = &responses[0];
-
+fn extract_response_data(response_data: &serde_json::Value) -> Result<(String, Vec<String>, String)> {
     // Extract decrypted value
-    let decrypted_value = result
-        .get("decrypted_value")
+    let decrypted_value = response_data
+        .get("decryptedValue")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
             FhevmError::DecryptionError("Missing decrypted_value in response".to_string())
         })?;
 
     // Extract signatures
-    let signatures = result
+    let signatures = response_data
         .get("signatures")
         .and_then(|s| s.as_array())
         .ok_or_else(|| FhevmError::DecryptionError("Missing signatures in response".to_string()))?
@@ -290,7 +277,15 @@ fn extract_response_data(response_data: &serde_json::Value) -> Result<(String, V
     );
     debug!("Extracted {} signatures", signatures.len());
 
-    Ok((decrypted_result, signatures))
+    let extra_data = response_data
+        .get("extraData")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| {
+            FhevmError::DecryptionError("Missing extra_data in response".to_string())
+        })?;
+
+    Ok((decrypted_result, signatures, extra_data))
 }
 
 fn validate_config(config: &ResponseConfig) -> Result<()> {
