@@ -2,7 +2,8 @@ use super::deserializer::deserialize_decrypted_result;
 use super::types::{DecryptedResults, ResponseConfig};
 use super::verification::verify_signatures;
 use crate::{FhevmError, Result};
-use alloy::primitives::FixedBytes;
+use alloy::dyn_abi::DynSolValue;
+use alloy::primitives::{FixedBytes, U256};
 use tracing::{debug, info};
 
 /// Builder for processing public decryption responses
@@ -146,7 +147,7 @@ impl PublicDecryptionResponseBuilder {
     /// - Signature verification fails
     /// - Threshold is not reached
     /// - Deserialization fails
-    pub fn process(self) -> Result<DecryptedResults> {
+    pub fn process(self) -> Result<(DecryptedResults, String)> {
         // Validate all required fields
         validate_config(&self.config)?;
 
@@ -166,7 +167,7 @@ impl ResponseProcessor {
         Self { config }
     }
 
-    fn process(self) -> Result<DecryptedResults> {
+    fn process(self) -> Result<(DecryptedResults, String)> {
         // Extract fields (safe unwraps after validation)
         let kms_signers = self.config.kms_signers.unwrap();
         let threshold = self.config.threshold.unwrap();
@@ -224,7 +225,26 @@ impl ResponseProcessor {
             debug!("   Handle {}: {:?}", &handle[..16], value);
         }
 
-        Ok(results)
+        let packed_num_signers = DynSolValue::Tuple(
+            vec![DynSolValue::Uint(U256::from(signatures.len()), 8)],
+        )
+        .abi_encode_packed();
+        let packed_signatures = DynSolValue::Tuple(
+            signatures.iter().map(|s| DynSolValue::Bytes(s.as_bytes().to_vec())).collect(),
+        )
+        .abi_encode_packed();
+        let extra_data = if extra_data.eq("0x") {
+            vec![0]
+        } else {
+            hex::decode(extra_data.trim_start_matches("0x")).unwrap_or_default()
+        };
+
+        let mut proof_bytes = packed_num_signers;
+        proof_bytes.extend_from_slice(&packed_signatures);
+        proof_bytes.extend_from_slice(&extra_data);
+        let decryption_proof = hex::encode(proof_bytes);
+
+        Ok((results, decryption_proof))
     }
 }
 
