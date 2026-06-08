@@ -230,7 +230,8 @@ impl ResponseProcessor {
         )
         .abi_encode_packed();
         let packed_signatures = DynSolValue::Tuple(
-            signatures.iter().map(|s| DynSolValue::Bytes(s.as_bytes().to_vec())).collect(),
+            signatures.iter()
+              .map(|s| DynSolValue::Bytes(hex::decode(s).unwrap_or_default())).collect(),
         )
         .abi_encode_packed();
         let extra_data = if extra_data.eq("0x") {
