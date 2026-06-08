@@ -229,7 +229,7 @@ impl ResponseProcessor {
             vec![DynSolValue::Uint(U256::from(signatures.len()), 8)],
         )
         .abi_encode_packed();
-        let packed_signatures = DynSolValue::Tuple(
+        let packed_signatures = DynSolValue::Array(
             signatures.iter()
               .map(|s| DynSolValue::Bytes(hex::decode(s).unwrap_or_default())).collect(),
         )
